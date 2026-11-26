@@ -33,4 +33,14 @@ GCP_PROJECT=burner-andbauer-7311 IAP_MEMBERS=you@example.com pnpm deploy:gcp
 
 The script builds the image with Cloud Build, deploys the Cloud Run service behind a global HTTPS load balancer with IAP (the organization's policies forbid public Cloud Run ingress and `allUsers`; `GCP_INGRESS=direct` puts IAP on Cloud Run itself where they don't), issues a managed certificate for `<address>.nip.io` or `GCP_DOMAIN`, mounts each secret that has a value, sets Firestore TTL policies, grants IAP access to each member and adds them to the Firestore `members` collection as evaluators, and creates the hourly Cloud Scheduler job. It prints the service URL. Re-run it to deploy a new revision.
 
+## Continuous deployment from GitHub (ps-salesforce/agentic-marketing-gcp only)
+
+Every push to `main` of `ps-salesforce/agentic-marketing-gcp` runs `.github/workflows/deploy-gcp.yml`, which runs this same `scripts/gcp/deploy.sh` (there's also a manual **Run workflow** button). No key or personal credential is stored anywhere:
+
+- GitHub's OIDC token is exchanged through the workload identity pool `github-actions` (provider `agentic-marketing-gcp`) for a short-lived token of `northstar-github-deployer@burner-andbauer-7311.iam.gserviceaccount.com`. The provider accepts only `assertion.repository == 'ps-salesforce/agentic-marketing-gcp' && assertion.ref == 'refs/heads/main'`, so forks, other branches and pull requests can't deploy.
+- The deployer holds only what the script uses. On the project: `cloudbuild.builds.editor`, `run.admin`, `compute.loadBalancerAdmin`, `iap.admin`, `cloudscheduler.admin`, `datastore.indexAdmin` (TTL policies), `secretmanager.viewer` (it lists secret versions; it can't read values), `serviceusage.serviceUsageConsumer` and `serviceUsageAdmin` (the IAP service identity), `storage.bucketViewer` (bucket metadata only) and `browser`. Narrower grants: `storage.admin` on the Cloud Build staging bucket only, `artifactregistry.reader` on the `northstar` repository only, and `iam.serviceAccountUser` on the build, run and scheduler service accounts only.
+- The repository's Actions secrets hold IDs, not credentials: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`, `GCP_PROJECT`.
+- CI doesn't pass `IAP_MEMBERS`, so it never changes who can sign in; add evaluators with a manual run of the script.
+- To stop it, delete the provider (`gcloud iam workload-identity-pools providers delete agentic-marketing-gcp --workload-identity-pool github-actions --location global`) or the workflow file.
+
 The service runs one instance with session affinity: each chat lives in that instance's memory and is saved to `gs://<bucket>/sessions/` after every change, so a restart reloads it. Set `MIN_INSTANCES=1` before a demo to keep the chat warm.

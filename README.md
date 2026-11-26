@@ -169,6 +169,8 @@ GCP_PROJECT=<project> scripts/gcp/bootstrap.sh                       # once: API
 GCP_PROJECT=<project> IAP_MEMBERS=<you@example.com> pnpm deploy:gcp   # build, deploy, load balancer, IAP, scheduler
 ```
 
+In `ps-salesforce/agentic-marketing-gcp`, every push to `main` deploys to Google Cloud through GitHub Actions, signed in with Workload Identity Federation (no stored key); see [infra/gcp/README.md](infra/gcp/README.md).
+
 The deploy builds the image with Cloud Build, runs it on Cloud Run behind a global HTTPS load balancer with Identity-Aware Proxy, and prints the URL. [infra/gcp/README.md](infra/gcp/README.md) lists every resource, the organization policies the setup satisfies, and the steps that need a person (secrets, Model Garden, the Salesforce callback).
 
 **Cloudflare.** `pnpm run deploy` builds the app, applies pending D1 migrations and deploys the Worker; merging to `main` does the same through Workers Builds; [infra/cloudflare/pot/README.md](infra/cloudflare/pot/README.md) has the gates.
