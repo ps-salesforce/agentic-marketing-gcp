@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-11-26T14:58:04.336Z",
+  "generatedAt": "2026-11-26T15:49:05.493Z",
   "status": "passed",
   "baseRef": "origin/main",
-  "mergeBase": "698332bbb52e00a3164cbd36748e92a33fd3790b",
+  "mergeBase": "7d15b654126203710798284e64a1a897887bce4d",
   "inventory": {
     "Tool": 109,
     "Write action": 5,
@@ -17,15 +17,22 @@
       "status": "updated",
       "paths": [
         "apps/edge/src/team/api.ts",
+        "apps/edge/src/team/director.ts",
         "apps/edge/src/team/evals.ts",
         "apps/edge/src/team/lifecycle-workers.ts",
         "apps/edge/src/team/lifecycle.ts",
         "apps/edge/src/team/run.ts",
         "apps/edge/src/team/scripted.ts",
+        "apps/web/src/team/AgentModal.tsx",
+        "apps/web/src/team/Guardrails.tsx",
+        "apps/web/src/team/IdCard.tsx",
+        "apps/web/src/team/LifecycleSummary.tsx",
+        "apps/web/src/team/TeamHierarchy.tsx",
         "apps/web/src/team/TeamLifecycle.tsx",
         "apps/web/src/team/TeamPeople.tsx",
         "apps/web/src/team/TeamPlatform.tsx",
         "apps/web/src/team/TeamView.tsx",
+        "apps/web/src/team/detail.tsx",
         "apps/web/src/team/session-metrics.ts",
         "apps/web/src/team/team-state.ts",
         "apps/web/src/team/team.css",
@@ -42,6 +49,21 @@
         "apps/web/src/team/TeamLifecycle.tsx",
         "packages/architecture/src/team-governance.ts",
         "packages/architecture/src/team-pharma.ts"
+      ]
+    },
+    {
+      "section": "two-hosts",
+      "status": "updated",
+      "paths": [
+        "apps/gcp/src/agent/ai-chat.ts"
+      ]
+    },
+    {
+      "section": "ui",
+      "status": "updated",
+      "paths": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/views.ts"
       ]
     },
     {
