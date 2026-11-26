@@ -5,18 +5,16 @@
 // unsupported claim, an unapproved image, a contact without consent or a module past its expiry is
 // refused with the reason, and the agent has to fix it.
 import {
-  TEAM_STEP_CAPS,
   type ApprovedJob,
-  buildTeamPolicies,
-  type GatewayContext,
   type AudienceLine,
   assetChoices,
   buildAudience,
-  claimsLibrary,
+  buildTeamPolicies,
+  type ClaimGap,
   type Concept,
   CURRENT_LABEL,
-  placementsFor,
-  reviewTier,
+  claimGaps,
+  claimsLibrary,
   conceptProblems,
   DECILE_BANDS,
   DECILE_LABELS,
@@ -25,21 +23,28 @@ import {
   draftModule,
   focusProblems,
   focusSourceIds,
+  type GatewayContext,
   HCP_UNIVERSE,
+  type LibraryClaim,
   type LifecycleWorker,
   type MlrJob,
   mlrJobCode,
   NEXT_ACTIONS,
-  PHARMA_CHANNELS,
   type PerformanceReport,
+  PHARMA_CHANNELS,
   type PharmaModule,
   type PhaseStep,
   pastResults,
   performanceProblems,
-  preReviewChecks,
+  placementsFor,
   prepareForm2253,
+  preReviewChecks,
+  productOf,
   type ResultLine,
+  reviewTier,
+  seedFlaw,
   semanticQuery,
+  TEAM_STEP_CAPS,
   teamAgentById,
   teamMarket,
 } from "@northstar/architecture";
@@ -56,10 +61,10 @@ import { z } from "zod";
 import { AGENT_GENERATION } from "../architecture/agent-runtime";
 import { offerTools } from "../architecture/context";
 import { forcedToolCallMiddleware } from "../forced-tool-middleware";
+import { serverHost } from "../platform/models";
 import { emitArtifact, lifecycleFile, lifecycleWorld } from "./lifecycle";
 import { assignmentLimit, type LimitHit, recordLimit, runLimit } from "./limits";
 import { newSaveState, refusal, type SaveState, stuckOnRefusal, stuckReport } from "./repeat-guard";
-
 import {
   addUsage,
   explainModelError,
@@ -71,7 +76,6 @@ import {
   type TeamRun,
   teamModel,
 } from "./run";
-import { serverHost } from "../platform/models";
 
 type AgentStep = Extract<PhaseStep, { kind: "agent" }>;
 
@@ -81,22 +85,29 @@ const many = <T extends z.ZodType>(item: T) => z.union([z.array(item), item]);
 const words = z.union([z.array(z.string()), z.string()]).optional();
 const date = z.string();
 
+/** Non-breaking and other Unicode hyphens, as some models write them, made plain. */
+const plainHyphens = (text: string) => text.replace(/[\u2010\u2011\u2012\u2013\u2212]/g, "-");
+
 /**
  * The claim topics an item names, under whichever key a model put them: the topics it lists, plus
  * every topic or claim ID (CLM-…) that appears anywhere in it, mapped to its topic. Models asked
  * for "claim IDs" send those, and gpt-oss writes ids with non-breaking hyphens.
  */
-function namedClaimTopics(
+export function namedClaimTopics(
   item: Record<string, unknown>,
   library: ReadonlyArray<{ topic: string; claimId: string | null }>,
 ): string[] {
-  const text = JSON.stringify(item).replace(/\u2011/g, "-");
+  const text = plainHyphens(JSON.stringify(item));
   const byId = new Map(
     library.flatMap((claim) => (claim.claimId ? [[claim.claimId, claim.topic] as const] : [])),
   );
   return [
     ...new Set([
-      ...list(item.claimTopics as string[] | string).map((topic) => byId.get(topic) ?? topic),
+      ...list(item.claimTopics as string[] | string).map((value) => {
+        // Look up the plain-hyphen form: CLM‑CRD‑0042 (non-breaking hyphens) is CLM-CRD-0042.
+        const topic = typeof value === "string" ? plainHyphens(value).trim() : value;
+        return byId.get(topic) ?? topic;
+      }),
       ...library
         .filter(
           (claim) => text.includes(claim.topic) || (claim.claimId && text.includes(claim.claimId)),
@@ -256,7 +267,7 @@ function readTools(run: TeamRun, agent: LifecycleWorker, step: AgentStep): ToolS
       async () => ({
         product: "Cardivance",
         currentLabel: CURRENT_LABEL,
-        campaignScope: "US HCPs, approved email and endemic HCP display",
+        campaignScope: "US HCPs, brand email to consented HCPs and endemic HCP display",
         claims: claimsLibrary(await lifecycleWorld(run), brand, run.brief.end),
       }),
     ),
@@ -362,6 +373,41 @@ function saveTool(
     return { saved: true, version: item.version, ...extra };
   };
   const refuse = (problems: string[]) => refusal(saved, problems);
+  /**
+   * Cite or refuse: each point a refused save tried to make without approved content is logged
+   * as a gap (once per point and kind), for the content team's claims backlog or for medical
+   * information. It is never written into the work.
+   */
+  const recordGaps = (gaps: ReturnType<typeof claimGaps>) => {
+    const logged = new Set(
+      run.events.flatMap((event) =>
+        event.type === "claim-gap" ? [`${event.gap.point}|${event.gap.kind}`] : [],
+      ),
+    );
+    for (const gap of gaps) {
+      const key = `${gap.point}|${gap.kind}`;
+      if (logged.has(key)) continue;
+      logged.add(key);
+      const entry: ClaimGap = {
+        ...gap,
+        id: `GAP-${String(logged.size).padStart(3, "0")}`,
+        product: productOf(brief),
+        phase: run.lifecycle?.phase ?? "",
+        raisedBy: agent,
+        tool: step.tool,
+        at: new Date().toISOString(),
+      };
+      run.emit({ type: "claim-gap", gap: entry });
+    }
+  };
+  const gapsIn = (
+    library: readonly LibraryClaim[],
+    items: ReadonlyArray<{
+      topics: readonly string[];
+      channel?: "email" | "display";
+      texts: Array<{ label: string; text: string }>;
+    }>,
+  ) => items.flatMap((item) => claimGaps({ library, brand: brief.brand, ...item }));
   const definitions: Record<
     string,
     { description: string; schema: z.ZodType; run: (input: never) => unknown }
@@ -432,6 +478,16 @@ function saveTool(
           })),
         }));
         const problems = conceptProblems(world, brief, concepts);
+        if (problems.length)
+          recordGaps(
+            gapsIn(
+              library,
+              concepts.map((concept) => ({
+                topics: concept.claimTopics,
+                texts: [{ label: "big idea", text: String(concept.bigIdea ?? "") }],
+              })),
+            ),
+          );
         return problems.length ? refuse(problems) : save({ concepts });
       },
     },
@@ -483,10 +539,24 @@ function saveTool(
             assets,
           });
           if (result.ok) modules.push(result.module);
-          else
+          else {
+            recordGaps(
+              gapsIn(library, [
+                {
+                  topics: claimTopics,
+                  channel,
+                  texts: [
+                    { label: "headline", text: String(draft.headline ?? "") },
+                    { label: "opening", text: String(draft.opening ?? "") },
+                    { label: "closing", text: String(draft.closing ?? "") },
+                  ],
+                },
+              ]),
+            );
             problems.push(
               ...result.problems.map((problem) => `Module ${index + 1} (${channel}): ${problem}`),
             );
+          }
         });
         return problems.length
           ? refuse(problems)
@@ -525,7 +595,17 @@ function saveTool(
           tier,
           coordinatorNotes: notes,
         };
-        return save(job, {
+        // A seeded flaw tests the reviewers: once per run, the MLR system slips a flawed copy of a
+        // module into the queue after the automated checks. It is withdrawn before approval.
+        const start = run.events.find((event) => event.type === "start");
+        const seeding =
+          start?.type === "start" &&
+          start.practice?.seededFlaw &&
+          !run.events.some((event) => event.type === "seeded-flaw")
+            ? seedFlaw(job)
+            : null;
+        if (seeding) run.emit({ type: "seeded-flaw", seeded: seeding.seeded });
+        return save(seeding?.job ?? job, {
           jobCode: job.jobCode,
           checks: checks.length,
           allPassed: true,

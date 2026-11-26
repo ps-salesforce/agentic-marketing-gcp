@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-11-26T02:05:30.678Z",
-  "status": "failed",
-  "baseRef": "upstream/main",
-  "mergeBase": "a04900a419f98c389f82cdfafd737c2e24509f14",
+  "generatedAt": "2026-11-26T14:58:04.336Z",
+  "status": "passed",
+  "baseRef": "origin/main",
+  "mergeBase": "698332bbb52e00a3164cbd36748e92a33fd3790b",
   "inventory": {
     "Tool": 109,
     "Write action": 5,
@@ -13,10 +13,24 @@
   },
   "drift": [
     {
-      "section": "two-hosts",
-      "status": "stale",
+      "section": "campaign-squad",
+      "status": "updated",
       "paths": [
-        "apps/edge/src/platform/vertex.ts"
+        "apps/edge/src/team/api.ts",
+        "apps/edge/src/team/evals.ts",
+        "apps/edge/src/team/lifecycle-workers.ts",
+        "apps/edge/src/team/lifecycle.ts",
+        "apps/edge/src/team/run.ts",
+        "apps/edge/src/team/scripted.ts",
+        "apps/web/src/team/TeamLifecycle.tsx",
+        "apps/web/src/team/TeamPeople.tsx",
+        "apps/web/src/team/TeamPlatform.tsx",
+        "apps/web/src/team/TeamView.tsx",
+        "apps/web/src/team/session-metrics.ts",
+        "apps/web/src/team/team-state.ts",
+        "apps/web/src/team/team.css",
+        "packages/architecture/src/team-evals.ts",
+        "packages/architecture/src/team.ts"
       ]
     },
     {
@@ -24,22 +38,20 @@
       "status": "updated",
       "paths": [
         "apps/edge/src/team/lifecycle-workers.ts",
-        "apps/edge/src/team/lifecycle.ts"
+        "apps/edge/src/team/lifecycle.ts",
+        "apps/web/src/team/TeamLifecycle.tsx",
+        "packages/architecture/src/team-governance.ts",
+        "packages/architecture/src/team-pharma.ts"
       ]
     },
     {
-      "section": "campaign-squad",
-      "status": "updated",
+      "section": "object-model",
+      "status": "reviewed",
       "paths": [
-        "apps/edge/src/team/lifecycle-workers.ts",
-        "apps/edge/src/team/lifecycle.ts",
-        "apps/web/src/team/TeamView.tsx",
-        "apps/web/src/team/ToolLibrary.tsx"
+        "packages/architecture/src/index.ts"
       ]
     }
   ],
   "notices": [],
-  "failures": [
-    "Learn drift: this branch changes code that these Learn sections explain, but the sections didn't change:\n  • two-hosts (“Two hosts: Cloudflare and Google Cloud”) ← apps/edge/src/platform/vertex.ts\nUpdate each section in apps/web/src/learn/content.ts (or its lesson or reference entries) so it teaches the change.\nIf nothing a reader learns has changed, say so in a commit trailer:\n  Learn-Reviewed: two-hosts (why no Learn update is needed)"
-  ]
+  "failures": []
 }

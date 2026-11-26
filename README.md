@@ -32,12 +32,12 @@ A marketer asks a question in plain language. The orchestrator agent reads campa
 - 🔍 **See the whole route.** Every answer shows which systems it touched (sign-in, router, classifier, model, Salesforce, graph) and a step-by-step trace of what the model did.
 - 🔀 **Pick the AI platform.** A menu in the top bar, beside Brand and Run as, runs the models on Workers AI or Vertex AI, whichever cloud hosts the app. Chat, campaign images and the squad's open models all follow it, and the server's config decides which platforms it offers.
 - 🕸️ **A knowledge graph you can explore.** Brands, campaigns, audiences, approvals and disclosures in one connected graph. The agent uses it to ground answers (GraphRAG) and to remember things across chats.
-- 🤝 **A squad of agents.** A campaign lead hands a brief to four specialists. You play the compliance reviewer and the client, and pick a concept made from an approved image library. When a guardrail stops an agent (a rule check, a policy denial or a malformed tool call), the page shows it as it happens and explains what it protected. Each agent's details show its allowances (tool calls, failed calls, model loops and the run's budget), how much it has used, and every guardrail that stopped it. Click any claim for its library record, browse every tool the agents can use (highlighted when used this session), and reset the session from the top of the page.
+- 🤝 **A squad of agents.** A campaign lead hands a brief to four specialists. You play the compliance reviewer and the client, and pick a concept made from an approved image library. When a guardrail stops an agent (a rule check, a policy denial or a malformed tool call), the page shows it as it happens and explains what it protected. Each agent's details show its allowances (tool calls, failed calls, model loops and the run's budget), how much it has used, and every guardrail that stopped it. Click any claim for its library record, browse every tool the agents can use (highlighted when used this session), and reset the session from the top of the page. In the pharma lifecycle, each phase carries the name a brand or agency team uses, each step says what the agent hands in and who signs off, a sign-off record lists who approved which version and when, every module line says whether it is an approved claim, AI-written or system-attached safety text, and a **Technical detail** switch shows or tucks away the machinery. On a phone the sidebar opens from a menu button, on a tablet it narrows to icons, and a decision's buttons stay in view while you read the evidence.
 - 🧭 **Watch an asset get made.** Journeys run real agents from goal to approved asset, pausing only where a person must decide.
 - 🏛️ **An architecture you can click through.** Governed objects, one gateway for every call, agent and prompt catalogs, and a plan-to-learn content lifecycle.
 - 📊 **Scored, not assumed.** An evaluation suite compares models on quality, routing, cost and speed, so the production model is chosen on evidence.
-- 🔗 **Every page has a link.** `/squad`, `/architecture`, `/journeys`, `/graph`, `/learn` and `/evaluations` survive a reload and work from the back button.
-- 🎓 **A built-in course.** 29 short lessons explain context, RAG and GraphRAG, and every moving part of the demo, written for the cloud you're on and the AI platform you picked, with low-level detail folded away until you open it. A CI check keeps them in step with the code.
+- 🔗 **Every page has a link.** `/squad`, `/architecture`, `/journeys`, `/graph`, `/learn`, `/playbook` and `/evaluations` survive a reload and work from the back button.
+- 🎓 **A built-in reference, and a playbook.** 27 short lessons explain what the model sees, the knowledge graph, and every moving part of the demo, written for the cloud you're on and the AI platform you picked, with low-level detail folded away until you open it. A CI check keeps them in step with the code. A separate **Playbook** page carries the general guidance (when to build an agent, failure patterns, security, evals, operations) and links each section to the lessons that show it here.
 - 🔐 **Secure by default.** Identity-Aware Proxy sign-in (Cloudflare Access on Cloudflare), per-user Salesforce OAuth, allow-listed tools, and kill switches for writes, tools and memory.
 
 ## 📸 A quick tour
@@ -70,7 +70,7 @@ A marketer asks a question in plain language. The orchestrator agent reads campa
     </td>
     <td width="50%">
       <img src="docs/images/readme/learn.jpg" alt="Learn course with three parts and a lesson on what context is"/>
-      <p align="center"><b>Learn</b><br/><sub>A hands-on course in context, GraphRAG and this demo.</sub></p>
+      <p align="center"><b>Learn</b><br/><sub>The reference for how the workbench works, lesson by lesson.</sub></p>
     </td>
   </tr>
 </table>
@@ -201,7 +201,7 @@ The deploy builds the image with Cloud Build, runs it on Cloud Run behind a glob
 
 ```text
 apps/
-  web/              React front end: chat, every view, the Learn course
+  web/              React front end: chat, every view, the Learn course and the Playbook page
   edge/             the shared server: orchestrator, gateway, MCP servers, APIs, platform seam;
                     plus the Cloudflare Worker entry
   gcp/              the Google Cloud host: Node server, chat host, Firestore, Vertex AI, Cloud Storage
@@ -216,11 +216,11 @@ migrations/         D1 schema
 scripts/            verification gates, evals, seeding, live proofs
 tests/              Playwright end-to-end tests
 infra/              Google Cloud and Cloudflare deployment notes
-docs/               plan, decisions, work units, security notes, the Learn course (both hosts)
+docs/               plan, decisions, work units, security notes, the Learn course (both hosts), the playbook
 ```
 
 ## 🤖 Built by agents
 
 This repository is agent-first: coding agents build, test, document and refine it. People step in for sign-ins, consent and final review. If you're an agent picking up work, start with the [getting-started checklist](docs/getting-started-for-agents.md) and [AGENTS.md](AGENTS.md), and don't infer live Salesforce, Google Cloud or Cloudflare state from this README.
 
-**Read more:** [the Learn course as one page](docs/learn-google-cloud.md) ([Cloudflare edition](docs/learn.md)) · [the plan](docs/agentic-marketing-workbench-plan.md) · [decision records](docs/decisions/) · [work units](docs/work-units/) · [Google Cloud deployment](infra/gcp/README.md) · [Cloudflare deployment gates](infra/cloudflare/pot/README.md) · [the Salesforce side](salesforce/README.md)
+**Read more:** [the agentic systems playbook](docs/playbook.md) · [the Learn course as one page](docs/learn-google-cloud.md) ([Cloudflare edition](docs/learn.md)) · [the plan](docs/agentic-marketing-workbench-plan.md) · [decision records](docs/decisions/) · [work units](docs/work-units/) · [Google Cloud deployment](infra/gcp/README.md) · [Cloudflare deployment gates](infra/cloudflare/pot/README.md) · [the Salesforce side](salesforce/README.md)

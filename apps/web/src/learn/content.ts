@@ -1,6 +1,8 @@
 /**
- * Learn page content: a primer on context and GraphRAG, then an in-depth explainer for each
- * concept the Northstar demo uses. Bodies are Markdown; every resource link was checked to resolve.
+ * Learn page content: the reference for how the Northstar workbench works, part by part. General
+ * guidance on agentic systems (when to build one, failure patterns, security, evals, operations)
+ * belongs in the Playbook (docs/playbook.md), not here. Bodies are Markdown; every resource link
+ * was checked to resolve.
  */
 
 export type Resource = {
@@ -21,9 +23,9 @@ export type LearnSection = {
 
 export type LearnPart = { id: string; title: string; intro: string; sections: LearnSection[] };
 
-export const LEARN_TITLE = "Learn: context, GraphRAG, and how this demo works";
+export const LEARN_TITLE = "Learn: how the workbench works";
 export const LEARN_LEDE =
-  "A hands-on course in how an agent uses context, how GraphRAG grounds answers in connected facts, and how every piece of this workbench fits together. Each lesson has a diagram, one key idea, a way to try it here, and links to go deeper.";
+  "A reference for every piece of this workbench: what the model sees each turn, the knowledge graph behind its answers, and each system, guard and page around them. Each lesson has a diagram, one key idea, a way to try it here, and where to find it in the code.";
 
 const R = {
   cedar: { label: "Cedar policy language", url: "https://www.cedarpolicy.com/", kind: "Docs" },
@@ -63,35 +65,10 @@ const R = {
     url: "https://www.anthropic.com/engineering/writing-tools-for-agents",
     kind: "Guide",
   },
-  lostInTheMiddle: {
-    label: "Lost in the Middle: How Language Models Use Long Contexts",
-    url: "https://arxiv.org/abs/2307.03172",
-    kind: "Paper",
-  },
-  rag: {
-    label: "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
-    url: "https://arxiv.org/abs/2005.11401",
-    kind: "Paper",
-  },
   graphragPaper: {
     label: "From Local to Global: A Graph RAG Approach (Microsoft Research)",
     url: "https://arxiv.org/abs/2404.16130",
     kind: "Paper",
-  },
-  msGraphrag: {
-    label: "Microsoft GraphRAG project",
-    url: "https://microsoft.github.io/graphrag/",
-    kind: "Docs",
-  },
-  neo4jGraphrag: {
-    label: "What is GraphRAG? (Neo4j)",
-    url: "https://neo4j.com/blog/genai/what-is-graphrag/",
-    kind: "Guide",
-  },
-  neo4jGraphragPython: {
-    label: "Neo4j GraphRAG for Python",
-    url: "https://neo4j.com/docs/neo4j-graphrag-python/current/",
-    kind: "Docs",
   },
   graphDb: {
     label: "Graph database concepts (Neo4j)",
@@ -107,11 +84,6 @@ const R = {
     label: "Neo4j Aura Query API",
     url: "https://neo4j.com/docs/aura/connecting-applications/query-api/",
     kind: "Docs",
-  },
-  graphAcademy: {
-    label: "Neo4j GraphAcademy (free courses)",
-    url: "https://graphacademy.neo4j.com/",
-    kind: "Course",
   },
   neo4jMcp: {
     label: "Official Neo4j MCP server",
@@ -302,27 +274,28 @@ const R = {
 export const LEARN_PARTS: LearnPart[] = [
   {
     id: "context",
-    title: "Primer: context",
+    title: "Context and memory",
     intro:
-      "Everything a model knows during a turn is its **context**. Most agent quality problems (forgetting, hallucinating, acting on stale facts) are context problems. This part covers what context is, how this demo manages it, and what goes wrong.",
+      "What the orchestrator puts in front of the model on each turn, where the workbench keeps everything else, and the guards against stale or injected context.",
     sections: [
       {
         id: "what-is-context",
-        title: "What context is",
-        summary: "The model only sees what is in its context window for this one call.",
-        body: `A language model has no memory between calls. Each time the orchestrator calls the model, it sends a **context window**: a bounded sequence of tokens that is all the model can see. Here that window holds:
+        title: "What the model sees on each turn",
+        summary: "The context window the orchestrator builds for every model call.",
+        body: `Each time the orchestrator calls the model, it sends a **context window**, and nothing else reaches the model. Here that window holds:
 
 - **System instructions:** the orchestrator's rules, such as "Salesforce tool results are the only authority" and "never claim a write happened".
 - **Tool definitions:** the name, description, and JSON input schema of every tool the model may call on this step.
 - **Conversation messages:** the recent user and assistant messages.
 - **Tool results:** what each tool returned earlier in this turn.
+- **The workspace summary:** the draft in focus, the records the chat opened, and the context cards its tools gathered (see *The workspace*).
 
-**Context engineering** decides what goes into that window, in what form, and what stays out. More is not better: long, noisy windows dilute attention ("context rot"), cost more, and let stale or injected text steer the model. Aim for the *smallest* set of high-signal information that lets the model do the next step well.`,
+What stays out matters as much: earlier replies arrive as text only, old tool results and reasoning never re-enter, and only the tools the turn's route offers are defined (see *Routing*). Why a small, high-signal window beats a large one is in the Playbook.`,
         inDemo: [
           "System prompt: apps/edge/src/turn-policy.ts (orchestratorSystemPrompt)",
           "Technical trace at the top of each answer shows what the model did with its context",
         ],
-        resources: [R.contextEngineering, R.lostInTheMiddle, R.buildingAgents],
+        resources: [R.contextEngineering],
       },
       {
         id: "memory-layers",
@@ -354,9 +327,9 @@ export const LEARN_PARTS: LearnPart[] = [
         title: "What goes wrong with context, and the defenses here",
         summary:
           "Stale claims, prompt injection, and overflow, plus the guards this demo uses against each.",
-        body: `**Stale or unsupported claims.** A wrong claim left in the window tends to be repeated as fact. Defense: earlier replies are *context, not evidence*. The system prompt requires re-checking Salesforce facts with tools each turn, and old tool results are stripped from history.
+        body: `**Stale or unsupported claims.** Defense: earlier replies are *context, not evidence*. The system prompt requires re-checking Salesforce facts with tools each turn, and old tool results are stripped from history.
 
-**Prompt injection.** Text inside data, such as a campaign description saying "ignore previous instructions", can try to steer the model. Defenses:
+**Prompt injection**, such as a campaign description saying "ignore previous instructions". Defenses:
 - The model has **no write tools**; writes need a human confirmation.
 - A **policy router** answers write and forbidden requests without calling the model.
 - Tool results are treated as data.
@@ -374,52 +347,17 @@ export const LEARN_PARTS: LearnPart[] = [
   },
   {
     id: "graphrag",
-    title: "Primer: RAG and GraphRAG",
+    title: "The knowledge graph",
     intro:
-      "**Retrieval-augmented generation (RAG)** grounds a model in data it wasn't trained on by retrieving relevant facts into its context. **GraphRAG** retrieves from a knowledge graph, so answers can follow relationships and show the path to their evidence.",
+      "The workbench grounds answers in a Neo4j knowledge graph through curated, read-only tools, and shows the path behind each answer. What RAG and GraphRAG are in general is in the Playbook.",
     sections: [
       {
-        id: "rag",
-        title: "RAG in one page",
-        summary:
-          "Retrieve relevant facts, add them to the context, then generate an answer grounded in them.",
-        body: `Plain RAG has three steps:
-
-1. **Retrieve** the data most relevant to the question, usually by embedding text as vectors and running a similarity search.
-2. **Augment** the model's context with those pieces and the question.
-3. **Generate** an answer from the retrieved facts instead of training data.
-
-RAG is excellent at "find the passage that answers this". It struggles when the answer depends on **connections** between facts spread across documents, such as *which accounts engaged with content from two campaigns and also lack SMS consent?* Similarity search finds similar text; it doesn't join facts.
-
-Here, tool calls are a form of retrieval: the Salesforce agents and the graph tools fetch facts at answer time.`,
-        resources: [R.rag, R.buildingAgents],
-      },
-      {
-        id: "graphrag-explained",
-        title: "GraphRAG",
-        summary:
-          "Retrieve connected facts from a knowledge graph and return the paths as evidence.",
-        body: `A **knowledge graph** stores entities (**nodes**, such as a Persona, a Campaign, or a MenuItem) and typed **relationships** between them (\`ENGAGED_WITH\`, \`TARGETS\`, \`FEATURED\`). **GraphRAG** retrieves by traversing those relationships. Common patterns:
-
-- **Curated graph queries** (used here): the model picks from fixed, parameterized queries such as *explain buyer group*. Predictable, safe, fast, and easy to evaluate.
-- **Text-to-Cypher:** the model writes graph queries itself. Flexible, but riskier and harder to govern.
-- **Hybrid vector + graph:** vector search finds entry points; graph traversal expands to connected context.
-- **Community summaries:** Microsoft's GraphRAG clusters the graph into communities and pre-summarizes them to answer global "what are the themes?" questions.
-
-GraphRAG's strengths are **multi-hop reasoning** and **explainability**: every answer can carry the path that justifies it, which the demo shows in the **Graph evidence** panel.`,
-        resources: [
-          R.graphragPaper,
-          R.msGraphrag,
-          R.neo4jGraphrag,
-          R.neo4jGraphragPython,
-          R.graphDb,
-        ],
-      },
-      {
         id: "graphrag-here",
-        title: "How this demo does GraphRAG",
+        title: "The graph, its tools, and evidence paths",
         summary: "Twelve read-only, curated graph tools over Neo4j, each returning evidence paths.",
-        body: `**The graph.** A deterministic, fictional dataset of about 2,400 nodes and 20,300 relationships:
+        body: `**Curated queries, not text-to-Cypher.** The model picks from fixed, parameterized graph queries (*explain buyer group*, *check consent coverage*); it never writes Cypher. That keeps graph access predictable, safe to run, fast, and easy to evaluate, and every answer can carry the relationships that justify it.
+
+**The graph.** A deterministic, fictional dataset of about 2,400 nodes and 20,300 relationships:
 - **Northstar**, the parent brand: B2B accounts (each with a headquarters country), buying-role personas, campaigns, segments, content, brand rules, and consent scopes.
 - **Coastline Kitchen**, a restaurant brand under Northstar: locations, menu, and dayparts from the restaurant system, with the same ids. Campaigns run on the **mobile app** and **email**. Each of 1,500 past push sends and 600 past email sends links to its campaign, content (push or email), app segment, channel consent, location, daypart, weather, and featured menu item, so an email campaign learns from past emails and a push from past pushes. Each location's app segment holds **marketing consent per channel** (separate push, email, and SMS opt-in counts): consent to one channel isn't consent to another.
 - **Harborstone Wealth**, a wealth-management brand under Northstar: regulated content with approval records and required disclosures, an embargoed acquisition with its release package, and institutional clients with holdings, signals, advisors, and contacts.
@@ -444,7 +382,7 @@ GraphRAG's strengths are **multi-hop reasoning** and **explainability**: every a
           "Graph evidence panel under answers; “Knowledge graph · Neo4j” in Sources",
           "packages/knowledge-graph, apps/edge/src/knowledge-graph",
         ],
-        resources: [R.cypher, R.queryApi, R.graphAcademy, R.neo4jMcp, R.agentforceNeo4j],
+        resources: [R.cypher, R.queryApi, R.neo4jMcp, R.agentforceNeo4j, R.graphragPaper],
       },
     ],
   },
@@ -539,6 +477,8 @@ Feature code asks \`dataPlatform(env)\` for repositories (D1, or the Firestore t
 **The page names its host.** \`packages/contracts/src/host.ts\` says what each host calls its sign-in, models, database, storage and scheduler. The Google Cloud server tags its page with \`<meta name="northstar-host" content="google-cloud">\`; the Worker leaves it untouched. The browser reads the tag once, so one build names the right services in the route map, image workflow, squad providers, identity chain, and this course. The course is written once, with inline host and AI-platform markers that \`apps/web/src/learn/variants.ts\` resolves: host from the meta tag, platform from the **AI platform** menu. \`docs/learn.md\` is the Cloudflare/Workers AI edition; \`docs/learn-google-cloud.md\` the Google Cloud edition.
 
 **Maintenance.** The hourly job (audit pruning, drift sweeps, memory expiry) runs from the Worker's cron, or from Cloud Scheduler calling the service with a Google-signed token only its service account can get. Firestore's time-to-live policies also delete expired rows as a backstop.
+
+**The image allowance outlives the drafts.** The proof's fixed cap on generated images counts every image a workspace has ever made, not the drafts still stored. Drafts expire after seven days (Cloud Storage's lifecycle rule deletes the files, Firestore's time-to-live the rows), so counting them would hand the allowance back as they expire. On Google Cloud a per-workspace counter in Firestore, which never expires, holds the count; deleting an expired draft doesn't change it. A workspace with drafts from before the counter existed starts it from those drafts. On Cloudflare the D1 rows outlive their R2 files (only the file expires), so the cap counts those rows.
 :::
 `,
         inDemo: [
@@ -623,8 +563,8 @@ Why it's trustworthy:
         id: "mcp",
         title: "Tools and the Model Context Protocol (MCP)",
         summary:
-          "A standard way for agents to discover and call tools, and the MCP servers the demo uses.",
-        body: `**Tool calling** lets a model ask the host to run a function with structured arguments and get the result. **MCP** standardizes it: a server advertises tools (name, description, JSON Schema for input), and clients list and call them over a transport such as streamable HTTP.
+          "The five MCP servers the orchestrator connects to each turn, and what each offers.",
+        body: `Every tool reaches the orchestrator over **MCP**: each server advertises its tools (name, description, JSON Schema for input), and the orchestrator lists and calls them.
 
 | Server | Tools | Reached |
 |---|---|---|
@@ -879,6 +819,7 @@ Each step shows live. Preparing: the plan, the permission check (how many passed
         summary: "Answers render as rich text, and records render as governed cards.",
         body: `- **Markdown answers.** The model may use concise Markdown, rendered with \`react-markdown\`, which never renders raw HTML, so model output can't inject markup.
 - **HXL cards.** Salesforce's HXL widgets (MCP Apps) let an agent action return a typed, interactive card, such as campaign readiness. Where HXL can't render, an accessible **native fallback** is built from the same contract.
+- **Phones and tablets.** Below 1000px the side rail narrows to one icon per page (each named on hover and to screen readers); on a phone the whole sidebar (pages, sources and the MCP gateway panel) slides out from the menu button (☰) in the header, closes when you pick a page, tap outside it or press Escape, and the brand, role and AI platform menus take a row of their own.
 
 ::: details How native cards show each item
 - **Item rows on native cards.** A list result shows one row per item: a colored status (usable, waiting, blocked), the item, a monospaced ID and a readable date, so an MLR ID and its expiry stand out. A row can list what stands behind it, such as a claim's trial evidence and the assets that carry it.
@@ -893,6 +834,7 @@ Each step shows live. Preparing: the plan, the permission check (how many passed
 - **Left rail.** Data sources fold into one line (how many are ready, which are offline); open it for the full list. The **MCP Gateway** box below stays open: the Salesforce connection's state, how many governed tools are connected, and which.
 :::
 
+- **Learn and Playbook.** Learn (this page) is the reference for how the workbench works; **Playbook** renders \`docs/playbook.md\`, general guidance for running agents in production, and links each of its sections to the Learn sections where the workbench shows it.
 - **Use-case library.** Every scenario, filterable by team, with prompts, systems and data flow. **Try it** fills the chat box without sending.
 - **Accessibility.** Targets WCAG 2.2 AA; tested in Chrome and Edge.
 
@@ -901,7 +843,7 @@ Each step shows live. Preparing: the plan, the permission check (how many passed
 **One scope in the header.** **Brand** and **Run as** apply everywhere: the chat (the message box suggests a prompt for the brand), the Graph's brand filter, the use-case library, the Architecture workspaces and the turn history. **AI platform** {{cloudflare: picks where the models run: Workers AI or Vertex AI || google-cloud: shows where the models run: Vertex AI only}}. It lists only what this server can reach, says why an option isn't set up, and is greyed out with one choice (ADR-021). Choices are remembered in the browser.
 
 ::: details Every page's address
-**Every page has an address.** Each left-rail page has a path: \`/squad\`, \`/architecture\`, \`/journeys\`, \`/graph\`, \`/learn\`, \`/evaluations\`, plus \`/history\` and \`/use-cases\` from the chat (itself \`/\`). Reloads stay put, links open the page, and Back returns to the previous one.
+**Every page has an address.** Each left-rail page has a path: \`/squad\`, \`/architecture\`, \`/journeys\`, \`/graph\`, \`/learn\`, \`/playbook\`, \`/evaluations\`, plus \`/history\` and \`/use-cases\` from the chat (itself \`/\`). Reloads stay put, links open the page, and Back returns to the previous one.
 :::
 `,
         inDemo: [
@@ -1284,7 +1226,7 @@ The Coastline campaign plan (email or push) chains these with the knowledge grap
 
 **Rules are code, not prompts.** Each spoke saves through one tool, and a service checks the work whatever the model wrote: findings must cite real data ids (cite or refuse); the palette must come from the brand book, and no image may show what it forbids; copy must fit each placement's character limits, avoid banned phrases and carry any required disclosure; the channel plan must respect minimum spends, the budget and the brief's window. A refused save comes back with every problem for the model to fix. A refusal for a missing field names the field and the values it accepts, because a model told only that its call was wrong tends to repeat it. Once the pieces are in, reconciliation finds clashes (a channel bought with no copy, copy for a channel not bought, an audience the analyst didn't recommend), and the lead resolves each or sends the piece back. The client gets a **proposal** and decides.
 
-**Guardrails at work.** Hitting a guardrail is the system working, so the page shows it: the **Guardrails** tab under the hood (its label counts what was caught) lists each rule refusal, gateway denial and rejected tool call as it happens, with the agent and tool, what the rule protects, and what the guardrail told the agent. A repeated mistake is counted (×3), and a hit is marked fixed once a later call to the same tool goes through. A worker that gets the same refusal three times in a row stops there: the second refusal tells it to change what it sends, and the third ends its assignment and gives the lead the exact problem, instead of retrying up to thirty times. Above that, **hard limits** stop work that spins without finishing: an agent's assignment, the lead's turn, or the whole run. A stop is recorded, shown in the Guardrails tab with the limit it hit, and reported to the lead (or, for the run, in its summary), so nobody has to notice a loop to end it. Each agent's details have a **Guardrails** tab: its allowances next to what it has used, the rule checks on its saves, the tools the gateway grants it, and every time a guardrail stopped it.
+**Guardrails at work.** Hitting a guardrail is the system working, so the page shows it: the **Guardrails** tab under the hood (its label counts what was caught) lists each automated pre-check refusal, action blocked by access control and malformed action as it happens, with the agent and tool, what the rule protects, and what the guardrail told the agent. A pre-check is named as one: it runs in code before any person reviews the work and never stands in for a reviewer. A repeated mistake is counted (×3), and a hit is marked fixed once a later call to the same tool goes through. A worker that gets the same refusal three times in a row stops there: the second refusal tells it to change what it sends, and the third ends its assignment and gives the lead the exact problem, instead of retrying up to thirty times. Above that, **hard limits** stop work that spins without finishing: an agent's assignment, the lead's turn, or the whole run. A stop is recorded, shown in the Guardrails tab with the limit it hit, and reported to the lead (or, for the run, in its summary), so nobody has to notice a loop to end it. Each agent's details have a **Guardrails** tab: its allowances next to what it has used, the rule checks on its saves, the tools the gateway grants it, and every time a guardrail stopped it.
 
 ::: details The hard limits and what each stops
 | Limit | Stops |
@@ -1308,6 +1250,8 @@ Under them, each assignment or lead turn gets up to 3 model loops of 10 steps (a
 ::: details How a run is scored
 **Evals.** Every run is scored when it ends, from its own events: whether it reached an approved proposal, how often the rules refused a save, how well findings are grounded, whether the plan uses the budget well and puts money where the audience responds, whether every bought channel has copy, how the agents coordinated, whether spokes answered each other, and whether the team acted on people's requests for changes. A request isn't a failure (people ask for changes, and the eval runner asks on purpose): each scores by whether the same person approved the next version, and the detail still shows how many first versions were approved. A judge model scores the proposal on five criteria from 1 to 5; the overall score is 70% checks, 30% judge. {{cloudflare: The judge is always the Workers AI judge champion || google-cloud: The judge is always the same Vertex AI model}}, whichever provider ran the squad, so providers are compared by the same yardstick.
 - The **Evals** tab shows the run's scorecard and this session's runs averaged per provider. Session metrics stay in this browser (local storage), never on the server, and count only runs this reader finished or stopped for a person and replays played or skipped to the end, scripted runs included, each labelled with its source. **Reset session metrics** starts afresh, and **Reset session** at the top of the page also clears the run on the page (runs in the shared library stay).
+- The same tab measures reliability and the judge itself. **pass^k** groups live runs of the same brief on the same provider and passes a brief only if every run reached its outcome (replays don't count; they re-show a run). Under each judged run you can **agree or disagree** with the judge; the tab keeps the agreement rate and says plainly that a judge is an opinion until it agrees with people on at least 100 labelled cases. For pharma lifecycle runs it also tracks **autonomy earned by evidence** per agent (see the pharma lifecycle lesson).
+- Every gateway decision carries the team policy set's version, and every prompt its own version (short hashes), so a decision can be traced to the exact rules and prompts behind it.
 - \`pnpm eval:team\` runs the reference briefs on each provider against a running workbench, plays the people (\`--feedback\` has each ask for changes once) and writes a comparison report.
 :::
 
@@ -1355,18 +1299,20 @@ Under them, each assignment or lead turn gets up to 3 model loops of 10 steps (a
           "Seven agents take a prescription brand's campaign through six phases while people decide at ten points, including an early concept review and Medical, Legal and Regulatory review, and claims carry their IDs into the channels.",
         body: `The **Pharma lifecycle** mode of the Campaign squad page runs a prescription brand's campaign end to end: business focus, ideation, content and MLR review, audience selection, publishing and analytics. Agents do all the work; people take the decisions a brand team, an MLR committee and an operations team would.
 
+**Written for the people who run content today.** Each phase carries the name a brand or agency team already uses (Brief & strategy, Concept, Copy & creative · MLR review · approval, HCP targeting, Deployment & 2253 filing, Measurement). Each step card says what the agent hands in and who decides, and which people's work the agent assists. Automated **pre-checks** are named as such: they run in code before any reviewer and never stand in for Medical, Legal or Regulatory review. A **sign-off record** beside the phases lists who approved which version of the work, when, and in their words. Content shows as two stages on the path, **Copy & creative** then **MLR review & approval**, though the server runs them as one phase. Every part of a module carries its source: **approved claim · verbatim** (entered by its ID), **AI-written · full MLR** (the headline, opening, closing and call to action), or **required text · system-attached** (a claim's required context, the ISI, boxed warning and PI). The MLR job opens with a review system's header: job code, round, review path (tier B, single reviewer for pre-approved content only; tier C, full MLR for new copy), content owner, submitter, reviewers and label version. A draft a pre-check refused shows on the output it failed, with every problem and whether a later version fixed it. The run status reads "Paused in Concept. Waiting on the brand lead: …" when a person is next, or "Stopped in …" with the reason when the lead gave up and the run can't continue, rather than the lead's instruction to itself. Which one comes from the run's state (whether it waits on a person), not from the wording of the lead's note. On a phone, a decision's buttons stay in view while you read the evidence above them, passing quality checks fold to one line, the agents under the map become tappable chips, and an agent's details open full screen. **Technical detail**, a switch at the top, shows the machinery inline (tool names, model ids, token counts, the lead's own note); off, each stays one click away, and dotted-underlined words explain themselves on hover.
+
 ::: details How the page lays out the phases
-**The page.** One phase shows at a time. A stepper across the top lists all six, marks each agent step and each of your decisions, and stays in view as you scroll. The chosen phase shows its documented steps, your decision when it's your turn, and its outputs: one-line summaries that open to full detail, with earlier versions kept. The team map and conversation sit beside it; agents, infrastructure, semantic layer, evals and the decision log share one tabbed panel underneath. You can open any phase before or during a run; the page moves to the active phase only after you decide something.
+**The page.** One phase shows at a time. A stepper across the top lists all six with their familiar names, marks each agent step and each of your decisions, and stays in view as you scroll. The chosen phase shows its documented steps, your decision when it's your turn, and its outputs: one-line summaries that open to full detail, with earlier versions kept. The team map, the sign-off record and the conversation sit beside it; the sign-off record, checks and guardrails, agents, quality score, semantic layer, tool library and infrastructure share one tabbed panel underneath, each tab with a line saying what it holds. You can open any phase before or during a run; the page moves to the active phase only after you decide something.
 :::
 
 **Claims are records, not sentences.** Each claim in the library (\`get_claims_library\`) has an ID (CLM-CRD-0042), the passages that substantiate it (CARDIO-HF report p. 7, table 2), the context it can't be used without (endpoint, trial and absolute rates), its scope (audience, market, channels), the label version it was approved against, its expiry, and the claims it must never sit beside. A search also returns near twins approved for something else (a consumer version, a rep detail aid version, an old-label version), each refused for this campaign with the reason. Click any claim on the page, a concept's topic or a module's, placement's or result's claim ID, for a card with its approved text, status, scope, label, expiry, references and the disclosures it requires, as the run's agents read them from the library. A tap opens it on a touch screen, and it stays on screen above scrolling tables and the agent details.
 
 **The path.**
 - **Business focus.** The audience analyst reads the segments, competitors, signals and last year's results and proposes two or three focus areas, each citing data ids and a success measure (\`propose_focus_areas\`). The **brand lead** chooses one.
-- **Ideation.** The art director starts from what is approved: concepts carried only by claims in scope for US HCP email and display under the current label, with approved, in-rights images from the asset library (\`find_approved_assets\`); no image is generated (\`propose_concepts\`). The brand lead chooses one, then a **medical reviewer** looks at the concept before anything is built, so an objection to the idea comes now, not at finished art.
+- **Ideation.** The art director starts from what is approved: concepts carried only by claims in scope for US HCP email and display under the current label, with approved, in-rights images from the asset library (\`find_approved_assets\`); no claim is written and no image is generated (\`propose_concepts\`). The brand lead chooses one, then a **medical reviewer** looks at the concept before anything is built, so an objection to the idea comes now, not at finished art.
 - **Content and MLR.** The copy lead assembles an email and a display module (\`draft_modules\`): each claim enters by ID, word for word, with its marker and required context, and the service attaches the ISI, boxed warning and PI beside the claims. A claim out of scope for the channel, audience or label, or two claims that must not appear together, are refused. The **MLR coordinator** runs the pre-review quality check (passage anchors, label version and scope, required context, reference validity, fair balance, and each module's net impression, since approved parts can still add up to a claim nobody approved), sets the review tier (new copy around approved claims is tier C, full committee) and submits the job (\`submit_mlr_job\`). **Medical**, **Legal** and **Regulatory** review in turn, routed by the MLR system without the lead. Regulatory's approval issues a document number, a material ID per module with its claim IDs, and an expiry (twelve months, or the first reference or claim expiry if sooner); the system checks every built variant against the approved version.
 - **Audience.** The audience analyst builds the HCP list by segment and prescribing decile (\`get_hcp_universe\`, \`build_audience\`): email only to HCPs with documented consent, the do-not-contact list removed everywhere, rep coverage shown. **Marketing operations** approves it.
-- **Publishing.** The channel planner schedules only approved modules, by material ID, to approved email and endemic HCP display, inside the window, before expiry and within budget (\`get_approved_job\`, \`schedule_deployment\`). The service stamps each placement with its material ID and claim IDs, so a claim's identity survives the handoff to the channels. The brand lead approves go-live; the MLR coordinator prepares **Form FDA 2253** with the scheduled materials and current PI version (\`prepare_form_2253\`), and **Regulatory** files it at first use. Only then does the schedule publish.
+- **Publishing.** The channel planner schedules only approved modules, by material ID, to brand email (sent by the brand to HCPs who consented to its email; not rep-triggered Approved Email) and endemic HCP display, inside the window, before expiry and within budget (\`get_approved_job\`, \`schedule_deployment\`). The service stamps each placement with its material ID and claim IDs, so a claim's identity survives the handoff to the channels. The brand lead approves go-live; the MLR coordinator prepares **Form FDA 2253** with the scheduled materials and current PI version (\`prepare_form_2253\`), and **Regulatory** files it at first use. Only then does the schedule publish.
 - **Analytics.** Thirty days in market are simulated from the brand's benchmarks and segment affinities, and labelled so. Results carry claim IDs and roll up by claim. The performance analyst reads them (\`get_campaign_results\`, \`get_past_results\`) and recommends continue, optimize or retire, citing result lines (\`report_performance\`). The brand lead decides; the system lists where every claim is live with its expiry and re-review date, and retiring turns that list into a withdrawal plan by ID.
 
 ::: details How the lead and the workers are kept to each step
@@ -1382,19 +1328,32 @@ Under them, each assignment or lead turn gets up to 3 model loops of 10 steps (a
 ::: details Models, caching and scoring
 **Models.** Coordinators (the campaign lead and MLR coordinator) run on each provider's top model, workers on a smaller one: Opus 5.5 and Sonnet 5.5 on Anthropic, gpt-6-astra and gpt-5.4-mini on OpenAI, {{workers-ai: GLM-5.3 and DeepSeek V4.1 Flash on Workers AI (a worker re-sends a growing prompt, and DeepSeek's cached input costs $0.006 per million tokens) || vertex: and gpt-oss-120b for both on Vertex AI, which serves no other open model here}}. The open-model tier uses the AI platform chosen in the top bar when the run starts, and the run records it. Each agent's calls share a growing prefix, so they are cached: Anthropic requests carry top-level \`cache_control\`, OpenAI requests a per-agent \`promptCacheKey\`, and the cost estimate prices cache reads at the cached rate.
 
-**Scoring.** The scorecard counts phases finished, saves accepted on the first try and gateway denials, and scores how the team acted on requests for changes from the MLR reviewers and the brand team: a request counts as met when that person approves the next version.
+**Scoring.** The scorecard counts phases finished, saves accepted on the first try and gateway denials, and scores how the team acted on requests for changes from the MLR reviewers and the brand team: a request counts as met when that person approves the next version. It also grades each worker's report against the trace (a report that says work was saved needs a save behind it), and, when the run seeds a flaw, whether a reviewer caught it. The judge scores the approved modules on a pharma rubric: fair balance, net impression, claim discipline and fit to the brief.
 :::
 
-**What it does not do.** No channel is called and no Form 2253 is filed; the results, the HCP universe and its consent rates are fictional. One person plays every role.`,
+**Controls from production practice (ADR-022).** The lifecycle shows the controls a regulated agent needs once it leaves the demo:
+- **Cite or refuse, with a gap log.** When the squad reaches for a point approved content can't support (no claim, a claim that isn't substantiated, a claim out of scope for the channel, or a fact in its own words), the point isn't written. It is logged with the product, date and reason. An off-label point is routed to medical information; the rest become the content team's backlog of new claims to take through MLR. The full log shows on the Measurement phase.
+- **A decision record per gate.** Each decision records the versions of the work the person saw, the policy set's version (a hash of the team's Cedar policies with the current kill switches and constraints) and each agent's prompt version, and how long the person took. Every gateway decision and every prompt carries its version too.
+- **Measuring the reviewers.** Under the hood, People shows each role's decisions, how often it asked for changes, its median time to decide and approvals faster than five seconds. **Seed a flawed module** (beside the start button) has the MLR system slip one flawed module into the review queue after the automated checks: a copy of the email module with its safety information stripped. Reviewers are told seeding happens; the page reveals whether they caught it once the job is decided, and the module is withdrawn before approval either way.
+- **Writes keyed and read back.** Go-live books the placements and Regulatory's approval files Form 2253, each once, under an idempotency key derived from the exact change set, so a retry can't double the write. Each is then read back from the system that took it and compared with what was sent; only a match is reported as done.
+- **Safety signals routed out.** HCP replies to the emails are screened: a possible adverse event goes to pharmacovigilance within one business day, and an off-label question goes to medical information. Promotion answers neither.
+- **Reliability and autonomy, from evidence.** The Evals tab shows pass^k (a brief run k times passes only if every run reached its outcome), lets you agree or disagree with the judge (a judge is trusted only after it agrees with people on at least 100 labelled cases), and tracks each agent's clean runs. After three clean runs in a row a person may promote an agent from Supervise to Assist; any gateway denial, hard limit or contradicted report drops it back automatically, and coming back takes one more clean run. Here the stage records what the evidence supports; every write still waits for a person.
+
+**What it does not do.** No channel is called and no Form 2253 is really filed: the booking, the filing's acknowledgment and the HCP replies are simulated, as are the results, the HCP universe and its consent rates. One person plays every role.`,
         inDemo: [
           "Campaign squad → What the team runs → Pharma lifecycle → Start the campaign lifecycle",
           "Campaign squad → the phase stepper (each agent step and decision, and where the run is)",
           "Campaign squad → a phase's workspace: its steps, your decision, and what it produced",
-          "Campaign squad → Under the hood (agents, infrastructure, semantic layer, evals, decisions)",
+          "Campaign squad → Under the hood (sign-off record, checks, agents, quality score, semantic layer, tools, infrastructure)",
+          "Campaign squad → Technical detail (the switch at the top)",
           "packages/architecture/src/team-pharma.ts",
           "apps/edge/src/team/lifecycle.ts, lifecycle-workers.ts",
           "docs/decisions/ADR-015-pharma-campaign-lifecycle.md",
           "docs/decisions/ADR-017-claims-managed-lifecycle.md",
+          "Campaign squad → Seed a flawed module for the MLR reviewers (Pharma lifecycle)",
+          "Campaign squad → Under the hood → People (decision records, reviewers) and Evals (pass^k, judge labels, autonomy)",
+          "packages/architecture/src/team-governance.ts",
+          "docs/decisions/ADR-022-playbook-controls-for-the-lifecycle.md",
         ],
         resources: [R.buildingAgents, R.cfAgents, R.aiGateway],
       },
@@ -1442,11 +1401,6 @@ export const GLOSSARY: Array<{ term: string; definition: string }> = [
       "A model that calls tools in a loop to do a task; its host controls which tools it may call.",
   },
   {
-    term: "Context engineering",
-    definition:
-      "Choosing the smallest, highest-signal context that lets the model do the next step well.",
-  },
-  {
     term: "Context window",
     definition:
       "Everything the model sees in one call: instructions, tool definitions, messages and tool results.",
@@ -1467,7 +1421,7 @@ export const GLOSSARY: Array<{ term: string; definition: string }> = [
   {
     term: "Forced tool call",
     definition:
-      "A step where the host makes the model call one specific tool. The demo avoids them (ADR-019): context limits which tools are offered, and the model chooses. The exceptions are nudges: a lifecycle worker whose save is the only tool left must call it, and the lifecycle lead's nudge must call \`lifecycle_step\`.",
+      "A step where the host makes the model call one specific tool. The demo avoids them (ADR-019): context limits which tools are offered, and the model chooses. The exceptions are nudges: a lifecycle worker whose save is the only tool left must call it, and the lifecycle lead's nudge must call `lifecycle_step`.",
   },
   {
     term: "GraphRAG",
