@@ -2,19 +2,24 @@
 // browser takes it, acting as the role it needs: the compliance reviewer for a regulated brand's
 // copy, and the client for the proposal. The server checks the role; agents can never decide.
 import {
-  CLIENT_ROUNDS,
   type CampaignBrief,
   type CampaignStrategy,
+  CLIENT_ROUNDS,
+  FAST_APPROVAL_MS,
   MEDIA_CHANNEL_LABELS,
   PERSONA_LABELS,
+  reviewerMetrics,
   TEAM_GATES,
+  TEAM_PARTY_LABELS,
+  type TeamAgentId,
   type TeamEvent,
 } from "@northstar/architecture";
 import { useRef, useState } from "react";
 import { RichText } from "./RichText";
+import type { TeamState } from "./team-state";
 
 type Waiting = Extract<TeamEvent, { type: "await-person" }>;
-type Decided = Extract<TeamEvent, { type: "decided" }> & { choiceLabel?: string };
+type Decided = TeamState["decisions"][number];
 
 /** What the reviewer checks: every placement's copy and its disclosure. */
 function CopyUnderReview({ strategy }: { strategy: CampaignStrategy }) {
@@ -133,22 +138,175 @@ export function DecisionCard({
   );
 }
 
-/** Every decision people took on this run, in order. */
-export function DecisionLog({ decisions }: { decisions: readonly Decided[] }) {
+const when = (at?: string) =>
+  at
+    ? new Date(at).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null;
+
+/** What a person did, in a sign-off's words. */
+const verb = (decision: Decided) =>
+  decision.decision === "changes"
+    ? "asked for changes"
+    : decision.choiceLabel
+      ? `chose “${decision.choiceLabel}”`
+      : decision.gate === "regulatory"
+        ? "approved for distribution"
+        : decision.gate === "fda-2253"
+          ? "filed Form FDA 2253"
+          : "approved";
+
+/**
+ * Every decision people took on this run, in order: who, what they signed off (the version of the
+ * work in front of them), when, and their words. The run's audit trail.
+ */
+export function DecisionLog({
+  decisions,
+  titles = {},
+}: {
+  decisions: readonly Decided[];
+  /** Plain names for the work a decision signed off, by artifact name. */
+  titles?: Record<string, string>;
+}) {
   if (decisions.length === 0) return null;
   return (
-    <ol className="team-decision-log" aria-label="Decisions by people">
+    <ol className="team-decision-log" aria-label="Sign-off record">
       {decisions.map((decision, index) => (
         <li key={`${decision.gate}-${index}`} className={`decision-${decision.decision}`}>
-          <strong>{TEAM_GATES[decision.gate].decider}</strong>{" "}
-          {decision.decision === "changes"
-            ? "asked for changes"
-            : decision.choiceLabel
-              ? `chose “${decision.choiceLabel}”`
-              : "approved"}
-          {decision.note ? `: “${decision.note}”` : "."}
+          <strong>{TEAM_GATES[decision.gate].decider}</strong> {verb(decision)}
+          {decision.signedOff ? (
+            <span className="team-signoff-subject">
+              {" "}
+              · {titles[decision.signedOff.name] ?? decision.signedOff.name} v
+              {decision.signedOff.version}
+            </span>
+          ) : null}
+          {when(decision.at) ? <small> · {when(decision.at)}</small> : null}
+          {decision.note ? <q>{decision.note}</q> : null}
+          {decision.record ? <DecisionRecordView record={decision.record} titles={titles} /> : null}
         </li>
       ))}
     </ol>
+  );
+}
+
+const seconds = (ms: number | null) =>
+  ms === null ? "—" : ms < 60_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`;
+
+/**
+ * What the decision rests on, for whoever has to answer for it later: the exact versions of the
+ * work the person saw, the policy set and the prompts behind it, and how long they took.
+ */
+function DecisionRecordView({
+  record,
+  titles,
+}: {
+  record: NonNullable<Decided["record"]>;
+  titles: Record<string, string>;
+}) {
+  return (
+    <details className="team-decision-record">
+      <summary>Decision record</summary>
+      <dl>
+        <dt>Decided on</dt>
+        <dd>
+          {record.reviewed.length
+            ? record.reviewed
+                .map((item) => `${titles[item.name] ?? item.name} v${item.version}`)
+                .join(", ")
+            : "The work in front of them"}
+        </dd>
+        <dt>Policy set</dt>
+        <dd>
+          <code>{record.policyVersion}</code>
+        </dd>
+        <dt>Prompts</dt>
+        <dd>
+          {Object.entries(record.promptVersions).length
+            ? Object.entries(record.promptVersions).map(([agent, version]) => (
+                <span key={agent}>
+                  {TEAM_PARTY_LABELS[agent as TeamAgentId] ?? agent} <code>{version}</code>{" "}
+                </span>
+              ))
+            : "—"}
+        </dd>
+        <dt>Time to decide</dt>
+        <dd>{seconds(record.decidedInMs)}</dd>
+      </dl>
+    </details>
+  );
+}
+
+/**
+ * Each reviewer's decisions on this run: how often they asked for changes and how long they took.
+ * An override rate near zero with near-instant approvals is a warning sign, not efficiency.
+ */
+export function ReviewerMetricsTable({ decisions }: { decisions: readonly Decided[] }) {
+  const rows = reviewerMetrics(decisions);
+  if (!rows.length) return null;
+  return (
+    <div className="team-table-wrap">
+      <table className="team-table">
+        <caption>Reviewers on this run</caption>
+        <thead>
+          <tr>
+            <th scope="col">Acting as</th>
+            <th scope="col">Decisions</th>
+            <th scope="col">Asked for changes</th>
+            <th scope="col">Median time to decide</th>
+            <th scope="col">Approved in under {FAST_APPROVAL_MS / 1000} s</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.persona}>
+              <th scope="row">
+                {PERSONA_LABELS[row.persona as keyof typeof PERSONA_LABELS] ?? row.persona}
+              </th>
+              <td>{row.decisions}</td>
+              <td>
+                {row.changes} ({Math.round(row.overrideRate * 100)}%)
+              </td>
+              <td>{seconds(row.medianMs)}</td>
+              <td className={row.fastApprovals ? "team-warn" : undefined}>{row.fastApprovals}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="arch-note">
+        Oversight is measured, not assumed: an approval faster than anyone could read the work, or
+        an override rate near zero over many decisions, is a warning sign. A run can also seed a
+        flawed item into the MLR queue to measure whether reviewers catch it.
+      </p>
+    </div>
+  );
+}
+
+/** The sign-off record beside the lifecycle: open while it is short, always one click away. */
+export function SignOffRecord({
+  decisions,
+  titles,
+}: {
+  decisions: readonly Decided[];
+  titles: Record<string, string>;
+}) {
+  return (
+    <details className="team-signoffs" open={decisions.length > 0 && decisions.length <= 6}>
+      <summary>
+        <strong>Sign-off record</strong>{" "}
+        <span>
+          {decisions.length} {decisions.length === 1 ? "decision" : "decisions"} by people
+        </span>
+      </summary>
+      {decisions.length === 0 ? (
+        <p className="arch-note">No one has signed anything off on this run yet.</p>
+      ) : (
+        <DecisionLog decisions={decisions} titles={titles} />
+      )}
+    </details>
   );
 }

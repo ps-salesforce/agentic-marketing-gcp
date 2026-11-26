@@ -16,14 +16,19 @@ function useCourse() {
   return learnFor(pageHost(), platform);
 }
 
-type View = "graph" | "history" | "evaluations" | "journeys" | "architecture" | "team";
+type View = "graph" | "history" | "evaluations" | "journeys" | "architecture" | "team" | "playbook";
 const READ_KEY = "northstar.learn.read.v1";
+const SECTION_IDS: ReadonlySet<unknown> = new Set(
+  COURSE.flatMap((part) => part.sections.map((section) => section.id)),
+);
 
 // Reading progress is a per-viewer convenience; it must work when storage is unavailable.
-function loadRead(): Set<string> {
+// Saved progress can name lessons that have since been retired; count only the current ones.
+export function loadRead(): Set<string> {
   try {
     const raw = window.localStorage.getItem(READ_KEY);
-    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    const saved = raw ? (JSON.parse(raw) as unknown) : [];
+    return new Set(Array.isArray(saved) ? saved.filter((id) => SECTION_IDS.has(id)) : []);
   } catch {
     return new Set();
   }
@@ -79,6 +84,12 @@ export function LearnView({
 
   const percent = Math.round((read.size / TOTAL_SECTIONS) * 100);
 
+  // Another page (the Playbook) can open Learn at a section: /learn#governance.
+  useEffect(() => {
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    if (id) window.requestAnimationFrame(() => jumpTo(id));
+  }, []);
+
   return (
     <section className="evaluations-view learn-view" aria-labelledby="learn-title">
       <div className="section-header">
@@ -94,6 +105,14 @@ export function LearnView({
       <div className="learn-hero">
         <div className="learn-hero-text">
           <p className="learn-hero-lede">{LEARN_LEDE}</p>
+          <p className="learn-hero-aside">
+            General guidance on building and running agents (when to use one, failure patterns,
+            security, evaluation, operations) is in the{" "}
+            <button type="button" className="text-button" onClick={() => onOpenView("playbook")}>
+              Playbook
+            </button>
+            . This page is the reference for how the workbench itself works.
+          </p>
           <div
             className="learn-progress"
             role="progressbar"
